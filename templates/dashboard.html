@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SRC USER DashBoard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Inter:wght@300;400;600;800&display=swap');
+        
+        :root { --accent: #3b82f6; --glow: rgba(59, 130, 246, 0.4); --bg-grad: #0f172a; }
+        .premium-ui { --accent: #f59e0b; --glow: rgba(245, 158, 11, 0.4); --bg-grad: #1e1b4b; }
+        .owner-ui { --accent: #a855f7; --glow: rgba(168, 85, 247, 0.4); --bg-grad: #2e1065; }
+
+        body { 
+            background: radial-gradient(circle at top right, var(--bg-grad), #020617);
+            color: white; font-family: 'Inter', sans-serif; overflow-x: hidden;
+            transition: background 0.5s ease;
+        }
+        .glass { 
+            background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 24px;
+        }
+        .neon-border { border: 1.5px solid var(--accent); box-shadow: 0 0 20px var(--glow); }
+        
+        .modal-active { opacity: 1 !important; pointer-events: auto !important; transform: scale(1) !important; }
+        .sidebar-active { transform: translateX(0) !important; }
+        .overlay-active { opacity: 1 !important; pointer-events: auto !important; }
+    </style>
+</head>
+<body class="pb-10">
+
+    <div id="sidebar-overlay" onclick="toggleMenu()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+    <div id="sidebar" class="fixed top-0 left-0 h-full w-[70%] max-w-[300px] bg-[#020617]/95 backdrop-blur-2xl z-50 transform -translate-x-full transition-transform duration-300 border-r border-white/10 flex flex-col">
+        <div class="p-6 flex-1 mt-4">
+            <h2 class="text-2xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500 mb-10">MENU</h2>
+            <nav class="space-y-6">
+                <a href="#" onclick="window.location.href='/dashboard'" class="flex items-center gap-4 text-white font-bold text-lg"><i class="fas fa-chart-pie text-[var(--accent)] w-6"></i> Dashboard</a>
+                
+                <a href="#" onclick="window.location.href='/profile'" class="flex items-center gap-4 text-gray-400 hover:text-white font-medium text-lg transition-colors"><i class="fas fa-user w-6"></i> Profile</a>
+                
+                <a href="#" onclick="window.location.href='/commands'" class="flex items-center gap-4 text-gray-400 hover:text-white font-medium text-lg transition-colors"><i class="fas fa-terminal w-6"></i> Commands</a>
+                
+                <a href="#" onclick="window.location.href='/activity'" class="flex items-center gap-4 text-gray-400 hover:text-white font-medium text-lg transition-colors"><i class="fas fa-bolt w-6"></i> Activity</a>
+            </nav>
+        </div>
+        <div class="p-6 border-t border-white/10">
+            <p class="text-[9px] text-gray-500 font-medium tracking-widest text-center">
+                Developed by <br><span class="text-white font-bold text-[10px] mt-1 inline-block">🇮‌🇹‌'🇸‌ 🇭‌4️⃣🇷‌ & Kamal</span>
+            </p>
+        </div>
+    </div>
+
+    <div class="p-5">
+        
+        <div class="flex justify-between items-center mb-6 pt-2">
+            <button onclick="toggleMenu()" class="text-2xl text-white hover:text-gray-300 active:scale-90 transition-transform"><i class="fas fa-bars"></i></button>
+            <h1 class="text-sm font-black tracking-[0.3em] uppercase text-gray-300">H4R Center</h1>
+            <div class="w-6"></div>
+        </div>
+
+        <div class="glass p-6 mb-6 flex items-center justify-between relative overflow-hidden">
+            <div id="role-tag" class="absolute top-5 -right-10 w-40 text-center rotate-45 text-[10px] font-black tracking-tighter uppercase bg-white text-black shadow-md">FREE 🟢</div>
+            
+            <div class="flex items-center gap-4">
+                <div id="avatar-container" class="relative">
+                    <img id="u-pfp" src="https://ui-avatars.com/api/?name=U" class="w-16 h-16 rounded-full border-2 border-white/20 shadow-lg">
+                </div>
+                <div>
+                    <h2 id="u-name" class="text-xl font-extrabold tracking-tight">Loading...</h2>
+                    <p id="u-id" class="text-[10px] text-gray-500 font-mono">ID: --------</p>
+                    <div class="mt-2 inline-block bg-black/40 px-3 py-1 rounded-full border border-white/5">
+                        <span id="expiry-label" class="text-[9px] font-bold text-gray-400">PLAN: FREE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="live-card" class="glass p-6 mb-6 transition-all duration-500">
+            <div class="flex justify-between items-center mb-5">
+                <h3 id="live-title" class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
+                    <i class="fas fa-moon mr-2 text-gray-500"></i>System Idle
+                </h3>
+                <span id="live-percent" class="text-lg font-black text-gray-500">0%</span>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="space-y-1">
+                    <p class="text-[8px] text-blue-400 font-bold">SOURCE 📥</p>
+                    <p id="s-name" class="text-xs font-bold text-gray-500 truncate">Waiting for task...</p>
+                </div>
+                <div class="space-y-1 text-right">
+                    <p class="text-[8px] text-purple-400 font-bold">DEST 📤</p>
+                    <p id="d-name" class="text-xs font-bold text-gray-500 truncate">...</p>
+                </div>
+            </div>
+            <div class="h-3 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
+                <div id="l-bar" class="h-full bg-gray-600 transition-all duration-1000" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div id="owner-section" class="hidden glass p-6 mb-6 border-purple-500/30">
+            <h3 class="text-xs font-bold mb-4 text-purple-400 uppercase tracking-widest"><i class="fas fa-crown mr-2"></i>Admin Console</h3>
+            <div id="user-list" class="space-y-3 max-h-64 overflow-y-auto pr-2"></div>
+        </div>
+
+        <div class="glass p-6 mb-6">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-xs font-bold uppercase tracking-widest text-gray-400">Recent Clones 🚀</h3>
+            </div>
+            <div id="hist-list" class="space-y-4">
+                <p class="text-center text-xs text-gray-600 py-10">No recent activity found</p>
+            </div>
+        </div>
+
+        <div class="flex gap-3 mb-8">
+            <button onclick="openInput('batch', 'BATCH CLONE 🚀', 'Enter Source Link/ID')" class="flex-1 glass py-4 flex flex-col items-center gap-1 active:scale-95 transition-all border-blue-500/20 shadow-lg">
+                <i class="fas fa-layer-group text-blue-400 text-lg"></i><span class="text-[8px] font-black tracking-wider">BATCH</span>
+            </button>
+            <button onclick="openInput('dl', 'DIRECT DOWNLOAD 📥', 'Enter Media Link')" class="flex-1 glass py-4 flex flex-col items-center gap-1 active:scale-95 transition-all shadow-lg">
+                <i class="fas fa-download text-green-400 text-lg"></i><span class="text-[8px] font-black tracking-wider">DOWNLOAD</span>
+            </button>
+            <button onclick="tg.sendData('/settings'); tg.close();" class="flex-1 glass py-4 flex flex-col items-center gap-1 active:scale-95 transition-all shadow-lg">
+                <i class="fas fa-sliders-h text-gray-400 text-lg"></i><span class="text-[8px] font-black tracking-wider">SETUP</span>
+            </button>
+        </div>
+
+        <div class="border-t border-white/5 pt-6 text-center">
+            <p class="text-[10px] text-gray-600 font-medium tracking-widest">
+                Developed by <br>
+                <span class="text-white font-bold text-[11px] mt-1 inline-block">🇮‌🇹‌'🇸‌ 🇭‌4️⃣🇷‌ & Kamal</span>
+            </p>
+        </div>
+
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-6 z-[60] opacity-0 pointer-events-none transition-all duration-300 scale-90">
+        <div class="glass w-full max-w-sm p-8 border-white/10 shadow-2xl">
+            <h3 id="m-title" class="text-lg font-black tracking-tight mb-2 uppercase text-white">COMMAND</h3>
+            <p id="m-desc" class="text-[10px] text-gray-400 mb-6 font-medium">Enter the required details below.</p>
+            <input type="text" id="m-input" class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-5 text-sm focus:outline-none focus:border-[var(--accent)] text-white transition-all mb-6 placeholder-gray-600" placeholder="...">
+            <div class="flex gap-4">
+                <button onclick="closeModal()" class="flex-1 py-3 text-xs font-black text-gray-500 hover:text-white transition-colors">CANCEL</button>
+                <button onclick="submitModal()" class="flex-1 bg-white text-black rounded-xl py-3 text-xs font-black hover:bg-gray-200 transition-all active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.3)]">START ⚡</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        if(tg.enableClosingConfirmation) tg.enableClosingConfirmation();
+
+        let activeCmd = "";
+        const uid = tg.initDataUnsafe.user?.id || 5842838338; // Default testing ID
+
+        function toggleMenu() {
+            const sb = document.getElementById('sidebar');
+            const ov = document.getElementById('sidebar-overlay');
+            sb.classList.toggle('sidebar-active');
+            ov.classList.toggle('overlay-active');
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        }
+
+        function openInput(cmd, title, desc) {
+            activeCmd = cmd;
+            document.getElementById('m-title').innerText = title;
+            document.getElementById('m-desc').innerText = desc;
+            document.getElementById('m-input').value = "";
+            document.getElementById('modal').classList.add('modal-active');
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        }
+
+        function closeModal() { document.getElementById('modal').classList.remove('modal-active'); }
+
+        function submitModal() {
+            const val = document.getElementById('m-input').value.trim();
+            if(!val) {
+                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+                return;
+            }
+            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            tg.sendData(`/${activeCmd} ${val}`);
+            tg.close();
+        }
+
+        async function sync() {
+            try {
+                const r = await fetch(`/api/status/${uid}`);
+                const d = await r.json();
+
+                const roleTag = document.getElementById('role-tag');
+                const expLabel = document.getElementById('expiry-label');
+                
+                // --- THEME & ROLE ENGINE ---
+                if(d.role === "premium") {
+                    document.body.className = "pb-10 premium-ui";
+                    roleTag.innerHTML = "PREMIUM 💎";
+                    roleTag.className = "absolute top-5 -right-10 w-40 text-center rotate-45 text-[10px] font-black bg-yellow-500 text-black shadow-[0_0_20px_rgba(245,158,11,0.5)]";
+                    document.getElementById('avatar-container').classList.add('neon-border');
+                    expLabel.innerText = "⏳ EXPIRES: " + d.expiry;
+                } else if(d.role === "owner") {
+                    document.body.className = "pb-10 owner-ui";
+                    roleTag.innerHTML = "OWNER 👑";
+                    roleTag.className = "absolute top-5 -right-10 w-40 text-center rotate-45 text-[10px] font-black bg-purple-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.5)]";
+                    document.getElementById('owner-section').classList.remove('hidden');
+                    
+                    // FIX 1: Owner Expiry Infinity Update
+                    expLabel.innerText = "⏳ EXPIRES: INFINITY ♾️";
+                    expLabel.classList.replace('text-gray-400', 'text-purple-300');
+                    
+                    if(d.admin_users) renderAdmin(d.admin_users);
+                }
+
+                document.getElementById('u-name').innerText = tg.initDataUnsafe.user?.first_name || "Guest User";
+                document.getElementById('u-id').innerText = "ID: " + uid;
+                if(tg.initDataUnsafe.user?.photo_url) document.getElementById('u-pfp').src = tg.initDataUnsafe.user.photo_url;
+
+                // --- LIVE PROGRESS ENGINE ---
+                const lCard = document.getElementById('live-card');
+                if(d.live && d.live.percentage !== undefined) {
+                    lCard.classList.add('neon-border');
+                    document.getElementById('live-title').innerHTML = '<i class="fas fa-satellite-dish animate-pulse mr-2 text-green-400"></i>Active Batch';
+                    document.getElementById('s-name').innerText = d.live.source || "N/A";
+                    document.getElementById('s-name').classList.replace('text-gray-500', 'text-white');
+                    document.getElementById('d-name').innerText = d.live.destination || "N/A";
+                    document.getElementById('l-bar').className = "h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-1000 shadow-[0_0_15px_rgba(168,85,247,0.5)]";
+                    document.getElementById('l-bar').style.width = d.live.percentage + "%";
+                    document.getElementById('live-percent').innerText = d.live.percentage + "%";
+                    document.getElementById('live-percent').classList.replace('text-gray-500', 'text-white');
+                } else {
+                    // Blank/Idle State
+                    lCard.classList.remove('neon-border');
+                    document.getElementById('live-title').innerHTML = '<i class="fas fa-moon mr-2 text-gray-500"></i>System Idle';
+                    document.getElementById('s-name').innerText = "Waiting for task...";
+                    document.getElementById('s-name').classList.replace('text-white', 'text-gray-500');
+                    document.getElementById('d-name').innerText = "...";
+                    document.getElementById('l-bar').className = "h-full bg-gray-600 transition-all duration-1000";
+                    document.getElementById('l-bar').style.width = "0%";
+                    document.getElementById('live-percent').innerText = "0%";
+                    document.getElementById('live-percent').classList.replace('text-white', 'text-gray-500');
+                }
+
+                // --- HISTORY ENGINE ---
+                // FIX 2: h.dest used instead of h.destination
+                if(d.history && d.history.length > 0) {
+                    document.getElementById('hist-list').innerHTML = d.history.map(h => `
+                        <div class="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors">
+                            <div class="w-2/3 overflow-hidden">
+                                <p class="text-[11px] font-bold truncate text-gray-200">${h.source}</p>
+                                <p class="text-[9px] text-gray-500 mt-1"><i class="fas fa-level-up-alt rotate-90 mr-1 text-purple-400"></i>${h.dest}</p>
+                            </div>
+                            <div class="text-right">
+                                <span class="bg-green-500/20 text-green-400 text-[10px] px-2 py-1 rounded-md font-black">+${h.count}</span>
+                                <p class="text-[8px] text-gray-600 mt-1.5 font-medium">${h.date}</p>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch(e) { console.log("Sync Error", e); }
+        }
+
+        function renderAdmin(users) {
+            document.getElementById('user-list').innerHTML = users.map(u => `
+                <div class="flex items-center justify-between bg-black/40 p-3 rounded-2xl border border-white/5">
+                    <span class="text-[10px] font-bold text-gray-300"><i class="fas fa-user-circle mr-2 text-gray-500"></i>${u.name} <br><span class="text-[8px] text-gray-600 font-mono">${u.id}</span></span>
+                    <div class="flex gap-2">
+                        <button onclick="adminAction('${u.id}', 'warn')" class="p-2 text-yellow-500 bg-yellow-500/10 rounded-lg text-[9px] font-bold active:scale-90 transition-transform hover:bg-yellow-500/20">WARN</button>
+                        <button onclick="adminAction('${u.id}', 'block')" class="p-2 text-red-500 bg-red-500/10 rounded-lg text-[9px] font-bold active:scale-90 transition-transform hover:bg-red-500/20">BLOCK</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function adminAction(targetId, action) {
+            if(confirm(`Are you sure you want to ${action} user ${targetId}?`)) {
+                await fetch('/api/admin/action', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({admin_id: uid, target_id: targetId, action: action})
+                });
+                sync();
+            }
+        }
+
+        setInterval(sync, 3000);
+        sync();
+    </script>
+</body>
+</html>

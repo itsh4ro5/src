@@ -47,6 +47,8 @@ Example: `+916205730972`"""
 async def set_bot_token(C, m):
     user_id = m.from_user.id
     args = m.text.split(" ", 1)
+    
+    # Pehle chalte hue purane bot/session ko stop aur clear karna
     if user_id in UB:
         try:
             await UB[user_id].stop()
@@ -62,16 +64,34 @@ async def set_bot_token(C, m):
             print(f"Stopped and removed old bot for user {user_id}")
         except Exception as e:
             print(f"Error stopping old bot for user {user_id}: {e}")
-            del UB[user_id] 
+            if UB.get(user_id, None):
+                del UB[user_id] 
 
+    # 🟢 CONVERSATIONAL FLOW FOR BUTTON CLICKS
     if len(args) < 2:
-        await m.reply_text("⚠️ Please provide a bot token. Usage: `/setbot token`", quote=True)
-        return
+        try:
+            # Pyromod ka ask method use karke token maangna
+            ask_msg = await C.ask(
+                m.chat.id,
+                "🧸 **Custom Bot Setup**\n\nKripya apna Bot Token yahan paste karein:\n_(Example: 1234567890:ABCdE-fGhIjK1LmNoPqRsTuv)_",
+                timeout=120
+            )
+            
+            if ask_msg.text in ["/cancel", "❌ Cancel"]:
+                return await m.reply_text("🚫 **Process Cancelled.**")
+            
+            bot_token = ask_msg.text.strip()
+        except asyncio.TimeoutError:
+            return await m.reply_text("⏳ **Timeout!** Aapne reply karne me zyada time laga diya. Kripya button pe dobara click karein.")
+        except Exception as e:
+            return await m.reply_text(f"❌ **Error:** {e}")
+    else:
+        # Agar user directly "/setbot TOKEN" likhta hai, toh ye chalega
+        bot_token = args[1].strip()
 
-    bot_token = args[1].strip()
+    # Token save karna
     await save_user_bot(user_id, bot_token)
     await m.reply_text("✅ Bot token saved successfully.", quote=True)
-    
     
 @bot.on_message(filters.command("rembot"))
 async def rem_bot_token(C, m):

@@ -143,29 +143,42 @@ async def get_msg(c, u, i, d, lt):
 async def get_ubot(uid):
     bt = await get_user_data_key(uid, "bot_token", None)
     if not bt: return None
-    if uid in UB: return UB.get(uid)
+    
+    # 1. Connected state check karo
+    if uid in UB: 
+        bot = UB.get(uid)
+        if bot and not bot.is_connected:
+            try: await bot.start()
+            except: pass
+        return bot
+        
     try:
-        bot = Client(f"user_{uid}", bot_token=bt, api_id=API_ID, api_hash=API_HASH)
+        # 🔥 FIX: Added in_memory=True to prevent SQLite DB Corruption & Lock issues
+        bot = Client(f"user_{uid}", bot_token=bt, api_id=API_ID, api_hash=API_HASH, in_memory=True)
         await bot.start()
         UB[uid] = bot
         return bot
-    except Exception: return None
+    except Exception as e:
+        logger.error(f"Error starting UBOT for {uid}: {e}") # Isse terminal me asli error dikhega
+        return None
 
 async def get_uclient(uid):
     ud = await get_user_data(uid)
     ubot = UB.get(uid)
     cl = UC.get(uid)
+    
     if cl:
         if not cl.is_connected:
             try: await cl.connect()
             except: pass
         return cl
+        
     if not ud: return ubot if ubot else None
+    
     xxx = ud.get('session_string')
     if xxx:
         try:
             ss = dcs(xxx)
-            
             from utils.func import get_or_create_fingerprint
             fingerprint = await get_or_create_fingerprint(uid)
             
@@ -174,6 +187,7 @@ async def get_uclient(uid):
                 api_id=API_ID, 
                 api_hash=API_HASH, 
                 session_string=ss,
+                in_memory=True, # 🔥 FIX: Ram Session to avoid SQLite Lock on user sessions
                 device_model=fingerprint.get("device_model", "Realme P3 Pro"),
                 system_version=fingerprint.get("system_version", "Android 14"),
                 app_version=fingerprint.get("app_version", "10.14.0"),
@@ -184,8 +198,10 @@ async def get_uclient(uid):
             await gg.start()
             UC[uid] = gg
             return gg
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error starting UCLIENT for {uid}: {e}")
             return ubot if ubot else Y
+            
     return Y
 
 async def prog(c, t, C, h, m, st, action="Downloading......."):

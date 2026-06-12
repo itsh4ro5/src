@@ -10,8 +10,8 @@ import aiofiles
 from motor.motor_asyncio import AsyncIOMotorClient
 from pyrogram import Client, filters
 from pyrogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-from pyrogram.errors import UserNotParticipant, FloodWait
-
+# 🔥 FIX 1: Added Fatal Errors to prevent retry loops when banned
+from pyrogram.errors import UserNotParticipant, FloodWait, ChatWriteForbidden, UserBannedInChannel, UserDeactivated
 # Local Imports
 from config import API_ID, API_HASH, STRING, FORCE_SUB, FREEMIUM_LIMIT, PREMIUM_LIMIT, MONGO_DB, DB_NAME
 from utils.func import db, get_user_data, screenshot, thumbnail, get_video_metadata, save_user_data
@@ -1181,8 +1181,7 @@ async def start_actual_batch(c, uid):
                                                 topic_title = topic_data.topics[0].title if (topic_data and getattr(topic_data, "topics", None)) else f"Extracted Topic {src_thread_id}"
                                             except Exception: topic_title = f"Backup Topic {src_thread_id}"
                                             try:
-                                                try: await ubot.get_chat(target_chat_id)
-                                                except: pass
+                                                # 🔥 FIX 2: Removed extra get_chat() API call. Isse API Spam aur PeerFlood ban kabhi nahi aayega!
                                                 new_topic = await ubot.create_forum_topic(chat_id=target_chat_id, title=topic_title)
                                                 new_dest_id = getattr(new_topic, "message_thread_id", getattr(new_topic, "id", None))
                                                 topic_map[src_thread_id] = new_dest_id
@@ -1303,6 +1302,10 @@ async def start_actual_batch(c, uid):
                                 skip_delay = random.uniform(2.1, 5.4)
                                 await asyncio.sleep(skip_delay)
                                 break 
+                        # 🔥 FIX 3: Agar user ban ho gaya ya account delete ho gaya, toh faltu me 3 baar retry nahi marega, turant ruk jayega.
+                        except (ChatWriteForbidden, UserBannedInChannel, UserDeactivated) as fatal_e:
+                            logger.error(f"🚨 FATAL ERROR: {fatal_e}. Account Restricted. Stopping task for this file.")
+                            break # Turant retry loop stop!
                         except Exception as e:
                             if attempt < max_retries - 1: await asyncio.sleep(5)
                 finally:
@@ -1353,10 +1356,19 @@ async def start_actual_batch(c, uid):
     finally:
         await remove_active_batch(uid)
         Z.pop(uid, None)
+        
+        # 🧹 FIX 4a: User Session RAM Cleanup
         if uid in UC:
             try: await UC[uid].stop()
             except Exception: pass
             finally: UC.pop(uid, None)
+            
+        # 🧹 FIX 4b: Custom Bot Zombie Session Cleanup (Yeh VPS ki Memory/RAM ko Crash hone se bachayega!)
+        if uid in UB:
+            try: await UB[uid].stop()
+            except Exception: pass
+            finally: UB.pop(uid, None)
+            
         ref_file = f"temp_reference_{uid}.mp4"
         if os.path.exists(ref_file):
             try: os.remove(ref_file)

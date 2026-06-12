@@ -1,12 +1,21 @@
+import asyncio
+import uvloop
+
+# 1. uvloop policy set karo
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+# 🔥 FIX: Naya loop create karke OS thread me set karo BEFORE any Pyrogram imports
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
 import os
 import sys
 import random
 import shutil
 import time
-import asyncio
-import uvloop
-# Pyrogram/Python ko default engine chhod kar super-fast uvloop use karne ko bolna
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 import importlib
 import logging
 import traceback

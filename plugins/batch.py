@@ -1088,16 +1088,8 @@ async def start_actual_batch(c, uid):
     await add_active_batch(uid, {"total": n, "current": 0, "success": 0, "source": str(i), "destination": str(target_chat_id), "cancel_requested": False, "progress_message_id": pt.id})
     topic_map = {}
     
-    ubot_status_msg = None
-    if ubot:
-        try:
-            ubot_status_msg = await ubot.send_message(
-                uid, 
-                f"🚀 **Batch Started!**\n\n📢 **From:** `{source_name}`\n🎯 **To:** `{dest_name}`\n📦 **Total Files:** {n}\n\n🔄 Progress updates will appear here every 10 seconds..."
-            )
-        except Exception: pass
-
-    last_ubot_update_time = time.time()
+    # 🔥 FIX: Custom Bot (ubot_status_msg) ka load hatakar Main Bot (pt) ko de diya!
+    last_pt_update_time = time.time()
     batch_start_time = time.time()
 
     # ========================================================
@@ -1109,7 +1101,6 @@ async def start_actual_batch(c, uid):
     doc_only = task_data.get("doc_only", False)
     skip_ai = task_data.get("skip_ai", False)
     
-    # Check if Watermark is purely bypassed/skipped
     watermark = str(task_data.get("watermark", "")).strip().lower()
     wm_skipped = (watermark == "skip") or (watermark == "")
     if watermark == "default":
@@ -1131,8 +1122,6 @@ async def start_actual_batch(c, uid):
     
     is_bulk_eligible = False
     
-    # 🔴 Strict Golden Rule For Bulk Forwarding:
-    # Everything MUST be skipped or empty (including watermark).
     if direct_forward and not has_text_rules and not is_restricted and not doc_only and wm_skipped and n > 1:
         if skip_ai:
             is_bulk_eligible = True
@@ -1147,31 +1136,24 @@ async def start_actual_batch(c, uid):
     try:
         if is_bulk_eligible:
             # 🚀 THE 10-BY-10 BULK ENGINE
-            await safe_pt_edit(f"🚀 **Bulk Engine Activated (10-by-10) ⚡**\n\n📢 **From:** `{source_name}`\n📦 **Total:** {n} files\n\n🤖 **Fast mode enabled. Check Custom Bot for live progress!**")
+            await safe_pt_edit(f"🚀 **Bulk Engine Activated (10-by-10) ⚡**\n\n📢 **From:** `{source_name}`\n📦 **Total:** {n} files\n\n⏳ Processing started...")
             
             all_ids = [int(s_id) + x for x in range(n)]
             chunks = [all_ids[k:k+10] for k in range(0, len(all_ids), 10)]
             
             for chunk_idx, chunk in enumerate(chunks):
-                # 🛡️ THE FIX: Safe Modulo Check based on Chunk Index (1000 files)
                 processed_count = chunk_idx * 10
                 if processed_count > 0 and processed_count % 1000 == 0:
-                    if ubot_status_msg:
-                        try: await ubot_status_msg.edit_text(f'💤 **Anti-Ban Shield Active!**\n1000 files processed. Taking a 3-minute break to prevent Telegram API Ban...')
-                        except: pass
-                    await asyncio.sleep(180) # 3 Min Sleep
+                    await safe_pt_edit(f'💤 **Anti-Ban Shield Active!**\n1000 files processed. Taking a 3-minute break to prevent Telegram API Ban...')
+                    await asyncio.sleep(180) 
                 
                 if time.time() - batch_start_time > 10800:
                     break_dur = random.uniform(1150.5, 1250.2)
-                    if ubot_status_msg:
-                        try: await ubot_status_msg.edit_text(f'💤 **Anti-Ban Break!**\nTaking a {int(break_dur/60)} min break to secure account...')
-                        except Exception: pass
+                    await safe_pt_edit(f'💤 **Anti-Ban Break!**\nTaking a {int(break_dur/60)} min break to secure account...')
                     await asyncio.sleep(break_dur)
                     batch_start_time = time.time()
                 
-                if should_cancel(uid):
-                    break
-                
+                if should_cancel(uid): break
                 await update_batch_progress(uid, min(n, (chunk_idx * 10) + 10), success)
                 
                 user_lock = get_user_lock(uid)
@@ -1210,87 +1192,62 @@ async def start_actual_batch(c, uid):
                                 break 
                                 
                     if has_bulk_func:
-                        copied = await client_to_use_for_bulk.copy_messages(
-                            chat_id=target_chat_id,
-                            from_chat_id=i,
-                            message_ids=chunk,
-                            reply_to_message_id=dest_thread_id 
-                        )
+                        copied = await client_to_use_for_bulk.copy_messages(chat_id=target_chat_id, from_chat_id=i, message_ids=chunk, reply_to_message_id=dest_thread_id)
                         success += len(copied)
                     else:
                         for msg_id in chunk:
                             try:
-                                await client_to_use_for_bulk.copy_message(
-                                    chat_id=target_chat_id,
-                                    from_chat_id=i,
-                                    message_id=msg_id,
-                                    reply_to_message_id=dest_thread_id
-                                )
+                                await client_to_use_for_bulk.copy_message(chat_id=target_chat_id, from_chat_id=i, message_id=msg_id, reply_to_message_id=dest_thread_id)
                                 success += 1
-                            except FloodWait as fw:
-                                await asyncio.sleep(fw.value + 5)
-                            except Exception:
-                                pass
+                            except FloodWait as fw: await asyncio.sleep(fw.value + 5)
+                            except Exception: pass
                     
                     await db["tasks"].update_one({"user_id": uid}, {"$set": {"success": success}})
                     
                     try:
                         percentage = int(((chunk_idx + 1) * 10 / n) * 100)
                         if percentage > 100: percentage = 100
-                        await db["live_status"].update_one(
-                            {"user_id": uid},
-                            {"$set": {
-                                "source": source_name, "source_id": str(i), "destination": dest_name, "dest_id": str(target_chat_id),
-                                "current": min((chunk_idx + 1) * 10, n), "total": n, "percentage": percentage
-                            }},
-                            upsert=True
-                        )
+                        await db["live_status"].update_one({"user_id": uid}, {"$set": {"source": source_name, "source_id": str(i), "destination": dest_name, "dest_id": str(target_chat_id), "current": min((chunk_idx + 1) * 10, n), "total": n, "percentage": percentage}}, upsert=True)
                     except Exception: pass
                     
                     await asyncio.sleep(random.uniform(3.5, 6.2))
                     
-                except FloodWait as fw:
-                    await asyncio.sleep(fw.value + 5)
+                except FloodWait as fw: await asyncio.sleep(fw.value + 5)
                 except Exception as e:
                     logger.error(f"Bulk Chunk error: {e}")
                     await asyncio.sleep(2)
-                finally:
-                    user_lock.release()
+                finally: user_lock.release()
                     
-                if time.time() - last_ubot_update_time >= 10:
-                    if ubot_status_msg:
-                        percent = round((min(n, (chunk_idx + 1) * 10) / n) * 100, 2)
-                        try:
-                            await ubot_status_msg.edit_text(
-                                f"📊 **Batch Progress (Bulk Mode ⚡)**\n\n📢 **From:** `{source_name}`\n📦 **Processed:** {min(n, (chunk_idx + 1) * 10)}/{n} ({percent}%)\n✅ **Success:** {success}\n🚀 **Speed:** 10x Fast Forward\n\n⏳ Process running smoothly..."
-                            )
-                        except Exception: pass
-                    last_ubot_update_time = time.time()
+                if time.time() - last_pt_update_time >= 15:
+                    percent = round((min(n, (chunk_idx + 1) * 10) / n) * 100, 2)
+                    await safe_pt_edit(
+                        f"📊 **Batch Progress (Bulk Mode ⚡)**\n\n"
+                        f"📢 **From:** `{source_name}`\n"
+                        f"📦 **Processed:** {min(n, (chunk_idx + 1) * 10)}/{n} ({percent}%)\n"
+                        f"✅ **Success:** {success}\n"
+                        f"🚀 **Speed:** 10x Fast Forward\n\n"
+                        f"⏳ Process running smoothly..."
+                    )
+                    last_pt_update_time = time.time()
 
         else:
             # ⚙️ THE STANDARD ENGINE (1-by-1)
-            await safe_pt_edit(f"⚙️ **Standard Mode Activated (1-by-1)**\n\n📢 **From:** `{source_name}`\n📦 **Total:** {n} files\n\n🤖 **Check Custom Bot for live progress!**")
+            await safe_pt_edit(f"⚙️ **Standard Mode Activated (1-by-1)**\n\n📢 **From:** `{source_name}`\n📦 **Total:** {n} files\n\n⏳ Starting engine...")
             
             for j in range(n):
-                # 🛡️ THE FIX: Anti-Ban logic safe placement (1000 files)
                 if j > 0 and j % 1000 == 0:
-                    if ubot_status_msg:
-                        try: await ubot_status_msg.edit_text(f'💤 **Anti-Ban Shield Active!**\n1000 files processed. Taking a 3-minute break to prevent Telegram API Ban...')
-                        except: pass
-                    await asyncio.sleep(180) # 3 Min Sleep
+                    await safe_pt_edit(f'💤 **Anti-Ban Shield Active!**\n1000 files processed. Taking a 3-minute break to prevent Telegram API Ban...')
+                    await asyncio.sleep(180)
                 
                 if time.time() - batch_start_time > 10800:
                     break_dur = random.uniform(1150.5, 1250.2)
-                    if ubot_status_msg:
-                        try: await ubot_status_msg.edit_text(f'💤 **Anti-Ban Break!**\nLagatar 3 ghante se process chal raha hai. {int(break_dur/60)} min ka break le raha hu...')
-                        except Exception: pass
+                    await safe_pt_edit(f'💤 **Anti-Ban Break!**\nLagatar 3 ghante se process chal raha hai. {int(break_dur/60)} min ka break le raha hu...')
                     await asyncio.sleep(break_dur)
                     batch_start_time = time.time()
                 
-                if should_cancel(uid):
-                    break
-                
+                if should_cancel(uid): break
                 await update_batch_progress(uid, j, success)
+                
                 mid = int(s_id) + j
                 max_retries = 3
                 res = None
@@ -1336,20 +1293,11 @@ async def start_actual_batch(c, uid):
                                     await db["tasks"].update_one({"user_id": uid}, {"$set": {"success": success}})
                                     try:
                                         percentage = int(((j + 1) / n) * 100)
-                                        await db["live_status"].update_one(
-                                            {"user_id": uid},
-                                            {"$set": {
-                                                "source": source_name, "source_id": str(i), "destination": dest_name, "dest_id": str(target_chat_id),
-                                                "current": j + 1, "total": n, "percentage": percentage
-                                            }},
-                                            upsert=True
-                                        )
+                                        await db["live_status"].update_one({"user_id": uid}, {"$set": {"source": source_name, "source_id": str(i), "destination": dest_name, "dest_id": str(target_chat_id), "current": j + 1, "total": n, "percentage": percentage}}, upsert=True)
                                     except Exception: pass
                                     break 
                                 else:
-                                    if attempt < max_retries - 1:
-                                        await asyncio.sleep(5) 
-                                        continue
+                                    if attempt < max_retries - 1: await asyncio.sleep(5) 
                                     else: break 
                             else:
                                 skip_delay = random.uniform(2.1, 5.4)
@@ -1360,32 +1308,39 @@ async def start_actual_batch(c, uid):
                 finally:
                     user_lock.release() 
 
+                # 🟢 DELAY CALCULATION
+                delay_time = 0
                 if n > 1 and (res and isinstance(res, str) and any(x in res for x in ['Done', 'Copied', 'Sent', 'Forwarded'])):
                     if 'Fast Forwarded' in res:
-                        delay_time = random.uniform(1.1, 3.4)
+                        delay_time = round(random.uniform(1.1, 3.4), 1)
                     else:
-                        delay_time = random.uniform(17.5, 35.8)
+                        delay_time = round(random.uniform(17.5, 28.5), 1)
+
+                # 🟢 UPDATE UI IN MAIN BOT (EVERY 15 SECONDS)
+                if time.time() - last_pt_update_time >= 15:
+                    percent = round(((j + 1) / n) * 100, 2)
+                    mode_str = 'Fast Forward ⏩' if (res and 'Fast Forwarded' in res) else 'Download & Upload ⬇️'
+                    delay_str = f"⏳ **Sleep Delay:** `{delay_time} sec...`" if delay_time > 0 else "⏳ **Process running smoothly...**"
+                    
+                    await safe_pt_edit(
+                        f"📊 **Batch Progress (Standard Mode)**\n\n"
+                        f"📢 **From:** `{source_name}`\n"
+                        f"📦 **Processed:** {j + 1}/{n} ({percent}%)\n"
+                        f"✅ **Success:** {success}\n"
+                        f"🚀 **Last Action:** {mode_str}\n\n"
+                        f"{delay_str}"
+                    )
+                    last_pt_update_time = time.time()
+
+                if delay_time > 0:
                     await asyncio.sleep(delay_time)
 
-                if time.time() - last_ubot_update_time >= 10:
-                    if ubot_status_msg:
-                        percent = round(((j + 1) / n) * 100, 2)
-                        mode_str = 'Fast Forward ⏩' if (res and 'Fast Forwarded' in res) else 'Download & Upload ⬇️'
-                        try:
-                            await ubot_status_msg.edit_text(
-                                f"📊 **Batch Progress (Standard Mode)**\n\n📢 **From:** `{source_name}`\n📦 **Processed:** {j + 1}/{n} ({percent}%)\n✅ **Success:** {success}\n🚀 **Last Action:** {mode_str}\n\n⏳ Process running smoothly..."
-                            )
-                        except Exception: pass
-                    last_ubot_update_time = time.time()
-
-        # 🔥 COMMON SUCCESS NOTIFICATION 🔥
+        # 🔥 COMMON SUCCESS NOTIFICATION (Updated for Main Bot)
         if not should_cancel(uid):
             try: await c.send_message(uid, f'✅ **Batch Completed!**\n📊 Successfully Processed: {success}/{n}\n🎯 Sent to Chat ID: `{target_chat_id}`')
             except: pass
             
-            if ubot_status_msg:
-                try: await ubot_status_msg.edit_text(f"🎉 **Batch Completed!**\n\n✅ **Success:** {success}/{n} files\n🎯 **Destination:** `{target_chat_id}`")
-                except Exception: pass
+            await safe_pt_edit(f"🎉 **Batch Completed!**\n\n✅ **Success:** {success}/{n} files\n🎯 **Destination:** `{target_chat_id}`")
                 
             try:
                 from datetime import datetime
@@ -1393,9 +1348,7 @@ async def start_actual_batch(c, uid):
                 await db["admin_logs"].insert_one({"admin_id": uid, "admin_name": admin_name, "action": f"Batch Cloned: {success} files", "target": f"From {source_name} ➔ {dest_name}", "timestamp": datetime.now()})
             except Exception: pass
         else:
-            if ubot_status_msg:
-                try: await ubot_status_msg.edit_text(f'🛑 **Process Cancelled by User!**\n\n✅ **Success:** {success}/{n} files')
-                except: pass
+            await safe_pt_edit(f'🛑 **Process Cancelled by User!**\n\n✅ **Success:** {success}/{n} files')
             
     finally:
         await remove_active_batch(uid)

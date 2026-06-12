@@ -4,6 +4,9 @@ import random
 import shutil
 import time
 import asyncio
+import uvloop
+# Pyrogram/Python ko default engine chhod kar super-fast uvloop use karne ko bolna
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 import importlib
 import logging
 import traceback

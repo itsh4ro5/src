@@ -36,6 +36,9 @@ ACTIVE_USERS_FILE = "active_users.json"
 LAST_UPDATE_TIME = {}
 PROGRESS_LINKS = {} 
 
+# FIX: Added an Async Lock to prevent JSON file corruption during concurrent writes
+ACTIVE_USERS_LOCK = asyncio.Lock()
+
 cancel_kb = ReplyKeyboardMarkup([[KeyboardButton("❌ Cancel")]], resize_keyboard=True, one_time_keyboard=True)
 
 try:
@@ -57,11 +60,12 @@ def load_active_users():
         return {}
 
 async def save_active_users_to_file():
-    try:
-        async with aiofiles.open(ACTIVE_USERS_FILE, 'w') as f:
-            await f.write(json.dumps(ACTIVE_USERS))
-    except Exception as e:
-        logger.error(f"⚠️ Failed to save active users file: {e}")
+    async with ACTIVE_USERS_LOCK:
+        try:
+            async with aiofiles.open(ACTIVE_USERS_FILE, 'w') as f:
+                await f.write(json.dumps(ACTIVE_USERS))
+        except Exception as e:
+            logger.error(f"⚠️ Failed to save active users file: {e}")
 
 async def add_active_batch(user_id: int, batch_info: Dict[str, Any]):
     ACTIVE_USERS[str(user_id)] = batch_info

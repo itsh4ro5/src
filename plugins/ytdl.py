@@ -382,17 +382,26 @@ async def split_and_upload_file(app, sender, file_path, caption):
     PART_SIZE =  1.9 * 1024 * 1024 * 1024
 
     part_number = 0
+    CHUNK_SIZE = 10 * 1024 * 1024  # 10MB Safe RAM chunks
+
     async with aiofiles.open(file_path, mode="rb") as f:
         while True:
-            chunk = await f.read(PART_SIZE)
-            if not chunk:
-                break
-
             base_name, file_ext = os.path.splitext(file_path)
             part_file = f"{base_name}.part{str(part_number).zfill(3)}{file_ext}"
-
+            
+            bytes_written = 0
+            # FIX: 1.9GB ek sath read karne ki jagah 10MB loops me read/write karega
             async with aiofiles.open(part_file, mode="wb") as part_f:
-                await part_f.write(chunk)
+                while bytes_written < PART_SIZE:
+                    chunk = await f.read(min(CHUNK_SIZE, int(PART_SIZE - bytes_written)))
+                    if not chunk:
+                        break
+                    await part_f.write(chunk)
+                    bytes_written += len(chunk)
+            
+            if bytes_written == 0:
+                os.remove(part_file)
+                break
 
             edit = await app.send_message(sender, f"⬆️ Uploading part {part_number + 1}...")
             part_caption = f"{caption} \n\n**Part : {part_number + 1}**"

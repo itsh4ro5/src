@@ -37,10 +37,23 @@ async def login_command(client, message):
     login_cache.pop(user_id, None)
     await message.delete()
     status_msg = await message.reply(
-        """Please send your phone number with country code
-Example: `+916205730972`"""
-        )
+        """Please send your phone number with country code\nExample: `+916205730972`"""
+    )
     login_cache[user_id] = {'status_msg': status_msg}
+    
+    # FIX: Session Auto-Killer (Memory Leak Prevention)
+    async def auto_timeout():
+        await asyncio.sleep(300) # 5 Minutes wait karega
+        if user_id in login_cache and get_user_step(user_id):
+            if 'temp_client' in login_cache[user_id]:
+                await login_cache[user_id]['temp_client'].disconnect()
+            login_cache.pop(user_id, None)
+            set_user_step(user_id, None)
+            try:
+                await status_msg.edit("⏳ **Login Timeout!** Aapne OTP nahi diya. Please use `/login` again.")
+            except: pass
+
+    asyncio.create_task(auto_timeout())
     
     
 @bot.on_message(filters.command("setbot"))

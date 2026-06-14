@@ -16,7 +16,7 @@ from pyrogram.errors import UserNotParticipant, FloodWait, ChatWriteForbidden, U
 from config import API_ID, API_HASH, STRING, FORCE_SUB, FREEMIUM_LIMIT, PREMIUM_LIMIT, MONGO_DB, DB_NAME
 from utils.func import db, get_user_data, screenshot, thumbnail, get_video_metadata, save_user_data
 from utils.func import get_user_data_key, process_text_with_rules, is_premium_user, E, log_admin_activity, get_display_name
-from utils.func import generate_thumbnail, beautify_caption, download_youtube_video, copy_header_and_repair
+from utils.func import generate_thumbnail, beautify_caption
 from shared_client import app as X
 from plugins.start import subscribe as sub
 from utils.custom_filters import login_in_progress
@@ -456,34 +456,6 @@ async def process_msg(c, u, m, d, lt, uid, i, task=None, dest_thread_id=None):
                         f = new_f_path
                     except Exception as e:
                         logger.error(f"Rename Error: {e}")
-                        
-            if m.video or (isinstance(f, str) and f.lower().endswith(('.mp4', '.mkv', '.webm'))):
-                reference_video_path = f"temp_reference_{uid}.mp4"
-                await safe_status_edit(c, uid, p.id, '🔍 Checking video health...')
-                
-                check_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", f]
-                proc = await asyncio.create_subprocess_exec(*check_cmd, stdout=asyncio.subprocess.PIPE)
-                stdout, _ = await proc.communicate()
-                is_corrupt = not bool(stdout.decode().strip())
-                
-                if is_corrupt:
-                    if os.path.exists(reference_video_path):
-                        await safe_status_edit(c, uid, p.id, '🛠 Video Crashed! Copying header from previous good video...')
-                        f = await copy_header_and_repair(f, reference_video_path)
-                        if not f:
-                            await c.delete_messages(uid, p.id)
-                            return 'Failed (Unfixable Crash)'
-                    else:
-                        await safe_status_edit(c, uid, p.id, '❌ Skipped: Video is crashed, but no reference video exists yet.')
-                        if os.path.exists(f): 
-                            try: os.remove(f)
-                            except: pass
-                        await c.delete_messages(uid, p.id)
-                        return 'Failed (No Reference)'
-                else:
-                    if not os.path.exists(reference_video_path):
-                        shutil.copy2(f, reference_video_path)
-                        logger.info("✅ Reference video saved for future header copying.")
 
             fsize = os.path.getsize(f) / (1024 * 1024 * 1024)
             th = None
@@ -612,7 +584,7 @@ async def process_msg(c, u, m, d, lt, uid, i, task=None, dest_thread_id=None):
             PROGRESS_LINKS.pop(p.id, None)
             LAST_UPDATE_TIME.pop(p.id, None)
 
-@X.on_callback_query(filters.regex("^(run_batch|run_docbatch|run_single|run_cancel|run_fix)$"))
+@X.on_callback_query(filters.regex("^(run_batch|run_docbatch|run_single|run_cancel)$"))
 async def direct_batch_execution(c, q):
     uid = q.from_user.id
     cmd = q.data.replace("run_", "")
@@ -627,11 +599,6 @@ async def direct_batch_execution(c, q):
             await c.send_message(q.message.chat.id, '✅ Cancellation requested. Process will stop soon.', reply_markup=ReplyKeyboardRemove())
         else:
             await c.send_message(q.message.chat.id, 'No active batch process found.', reply_markup=ReplyKeyboardRemove())
-        return
-        
-    if cmd == "fix":
-        FIX_DATA[uid] = {"step": "await_corrupt"}
-        await c.send_message(q.message.chat.id, "📁 **Manual Repair Mode ON**\n\nAb wo **Corrupted Video** bhejen jise fix karna hai.", reply_markup=cancel_kb)
         return
 
     if FREEMIUM_LIMIT == 0 and not await is_premium_user(uid):
@@ -1372,11 +1339,6 @@ async def start_actual_batch(c, uid):
             try: await UB[uid].stop()
             except Exception: pass
             finally: UB.pop(uid, None)
-            
-        ref_file = f"temp_reference_{uid}.mp4"
-        if os.path.exists(ref_file):
-            try: os.remove(ref_file)
-            except Exception: pass
         
         try:
             from datetime import datetime
@@ -1391,50 +1353,3 @@ async def start_actual_batch(c, uid):
             })
             await db["live_status"].delete_one({"user_id": uid}) 
         except Exception: pass
-
-@X.on_message(filters.command("fix") & filters.private)
-async def fix_command_handler(c, m):
-    uid = m.from_user.id
-    FIX_DATA[uid] = {"step": "await_corrupt"}
-    await m.reply_text("📁 **Manual Repair Mode ON**\n\nAb wo **Corrupted Video** bhejen jise fix karna hai.", reply_markup=cancel_kb)
-
-@X.on_message(filters.video & filters.private)
-async def manual_fix_media_handler(c, m):
-    uid = m.from_user.id
-    if uid not in FIX_DATA: return 
-    step = FIX_DATA[uid].get("step")
-
-    if step == "await_corrupt":
-        FIX_DATA[uid]["corrupt_msg"] = m
-        FIX_DATA[uid]["caption"] = m.caption.markdown if m.caption else ""
-        FIX_DATA[uid]["step"] = "await_reference"
-        await m.reply_text("✅ Corrupted video received.\n\nAb wo **Reference Video** bhejen jiska header copy karna hai.", reply_markup=cancel_kb)
-
-    elif step == "await_reference":
-        status = await m.reply_text("⏳ Repairing process started...", reply_markup=ReplyKeyboardRemove())
-        corrupt_msg = FIX_DATA[uid]["corrupt_msg"]
-        ref_msg = m
-        caption = FIX_DATA[uid]["caption"]
-        corrupt_path, ref_path = f"manual_corrupt_{uid}.mp4", f"manual_ref_{uid}.mp4"
-
-        try:
-            await status.edit_text("📥 Downloading Corrupted Video...")
-            c_file = await corrupt_msg.download(file_name=corrupt_path)
-            await status.edit_text("📥 Downloading Reference Video...")
-            r_file = await ref_msg.download(file_name=ref_path)
-            await status.edit_text("🛠 Repairing video...")
-            fixed_file = await copy_header_and_repair(c_file, r_file)
-
-            if fixed_file and os.path.exists(fixed_file):
-                await status.edit_text("📤 Uploading Fixed Video...")
-                mtd = await get_video_metadata(fixed_file)
-                await c.send_video(chat_id=m.chat.id, video=fixed_file, caption=caption, width=mtd['width'], height=mtd['height'], duration=mtd['duration'])
-                await status.delete()
-            else:
-                await status.edit_text("❌ Repair Failed! Reference video match nahi ho raha hai.")
-        except Exception as e:
-            await status.edit_text(f"❌ Error: {str(e)}")
-        finally:
-            for f in [corrupt_path, ref_path]:
-                if os.path.exists(f): os.remove(f)
-            FIX_DATA.pop(uid, None)

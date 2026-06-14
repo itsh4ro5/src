@@ -40,7 +40,7 @@ async def process_single_sync(sync):
 
     latest_msgs = []
     # Check max 15 recent messages per hour to avoid flood
-    async for msg in client_to_use.get_chat_history(src_id_int, limit=15):
+    async for msg in client_to_use.get_chat_history(src_id_int, limit=80):
         if msg.id > last_msg_id:
             latest_msgs.append(msg)
         else:

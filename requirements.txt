@@ -1,7 +1,6 @@
 telethon
 python-dotenv
 psutil
-opencv-python-headless
 cryptg
 devgagantools
 aiofiles

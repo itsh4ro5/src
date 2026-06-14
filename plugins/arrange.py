@@ -161,57 +161,63 @@ async def arrange_conversation(client, message: Message):
 
 async def start_arranging(bot_client, user_client, source_id, dest_id, status_msg, user_id):
     try:
-        all_messages = []
-        await status_msg.edit("🔍 **Fetching all messages using User Session...**")
-        async for msg in user_client.get_chat_history(source_id):
-            if msg.empty: continue
-            all_messages.append(msg)
-            
-        all_messages.reverse()
-        total_msgs = len(all_messages)
+        await status_msg.edit("🔍 **Scanning and Categorizing messages (Memory Safe Mode)...**")
         
-        if total_msgs == 0:
-            await user_client.stop()
-            return await status_msg.edit("❌ Source channel me koi message nahi mila!")
-            
         created_topics = {} 
         needs_pin = {} 
         skipped_links = []
-        chat_id_str = str(source_id).replace("-100", "") 
-        
-        await status_msg.edit("🔍 **Scanning existing topics...**")
-        try:
-            async for topic in user_client.get_forum_topics(dest_id):
-                created_topics[topic.title.lower()] = topic.id
-        except Exception:
-            pass
-
-        # ⚡ RAM PRE-PROCESSING (Files ko pehle hi topics ke hisaab se group karna)
         categorized_messages = {}
-        skipped_count = 0
         
-        for msg in all_messages:
+        chat_id_str = str(source_id).replace("-100", "") 
+        total_msgs = 0
+        skipped_count = 0
+
+        # 🟢 SMART RAM-SAFE FETCHING LOOP 
+        async for msg in user_client.get_chat_history(source_id):
+            if msg.empty: continue
+            total_msgs += 1
+            
             caption = msg.caption or msg.text or ""
             if not caption and not msg.media:
                 skipped_count += 1
                 skipped_links.append(f"https://t.me/c/{chat_id_str}/{msg.id}  (Reason: No Media & No Caption)")
                 continue
 
+            # Topic Extractor Regex
             topic_match = re.search(r"(?:Topic|Subject)[^:]*:\s*(.+)", caption, re.IGNORECASE)
             topic_name = topic_match.group(1).strip() if topic_match else "Uncategorized Files"
             
             if topic_name not in categorized_messages:
                 categorized_messages[topic_name] = []
+            
+            # Sirf ID (integer) save kar rahe hain, poora message object nahi!
             categorized_messages[topic_name].append(msg.id)
+            
+        if total_msgs == 0:
+            await user_client.stop()
+            return await status_msg.edit("❌ Source channel me koi message nahi mila!")
+            
+        # 🟢 REVERSE THE IDS (Taaki Oldest to Newest copy ho, kyunki history newest to oldest aati hai)
+        for topic in categorized_messages:
+            categorized_messages[topic].reverse()
+            
+        await status_msg.edit("🔍 **Scanning existing topics in destination...**")
+        try:
+            async for topic in user_client.get_forum_topics(dest_id):
+                created_topics[topic.title.lower()] = topic.id
+        except Exception:
+            pass
 
         processed_count = 0
         last_update_time = time.time()
         
         await status_msg.edit(f"🛡️ **Starting Ultra-Safe Arrangement Engine**\nTotal Files: {total_msgs}\n\nProgress: 0%")
 
+        # Yahan se tumhara aage ka existing code waise hi rahega...
         for topic_name, msg_ids in categorized_messages.items():
             if not ARRANGE_ACTIVE_TASKS.get(user_id, True):
                 break
+# ... (Neeche ka for index, mid in enumerate(msg_ids) wala loop completely same rahega)
                 
             topic_key = topic_name.lower()
             

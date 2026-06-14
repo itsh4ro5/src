@@ -17,16 +17,6 @@ def get_list_int_env(name, default=None):
         return list(map(int, value.split()))
     return default or []
 
-# VPS --- FILL COOKIES 🍪 in """ ... """ 
-
-INST_COOKIES = """
-# write up here insta cookies
-"""
-
-YTUB_COOKIES = """
-# write here yt cookies
-"""
-
 # WARNING: Apni sensitive details yahan hardcode mat karo. Hugging Face ki Settings > Secrets me add karo.
 API_ID = os.getenv("API_ID", "") 
 API_HASH = os.getenv("API_HASH", "")

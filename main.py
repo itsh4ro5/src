@@ -50,8 +50,6 @@ async def setup_bot_commands():
             BotCommand("logout", "🆓 Logout from your current session"),
             BotCommand("single", "🆓 Extract a single restricted message"),
             BotCommand("batch", "🌟 Extract multiple restricted messages"),
-            BotCommand("dl", "🆓 Download video from YouTube/Insta/etc"),
-            BotCommand("adl", "🆓 Download audio from YouTube/Insta/etc"),
             BotCommand("forward", "🆓 Toggle Fast Forward Mode (No Download)"),
             BotCommand("settings", "🆓 🎨 Settings & Customize Thumbnail"),
             BotCommand("id", "🆓 🆔 Get Chat/User ID"),
@@ -59,7 +57,6 @@ async def setup_bot_commands():
             BotCommand("redeem", "🆓 Redeem your Premium Code"),
             BotCommand("setbot", "🌟 Set your custom bot token"),
             BotCommand("rembot", "🌟 Remove your custom bot token"),
-            BotCommand("gen", "👑 Generate Premium Redeem Code")
         ])
         logger.info("✅ Advanced Bot command menu set successfully!")
     except Exception as e:

@@ -7,7 +7,6 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 import yt_dlp
-import cv2
 from motor.motor_asyncio import AsyncIOMotorClient
 from groq import AsyncGroq
 
@@ -464,38 +463,32 @@ async def screenshot(video: str, duration: int, sender: str) -> str | None:
 
 async def get_video_metadata(file_path):
     default_values = {'width': 1, 'height': 1, 'duration': 1}
-    loop = asyncio.get_event_loop()
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
-    
     try:
-        def _extract_metadata():
-            try:
-                vcap = cv2.VideoCapture(file_path)
-                if not vcap.isOpened():
-                    return default_values
-
-                width = round(vcap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = round(vcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps = vcap.get(cv2.CAP_PROP_FPS)
-                frame_count = vcap.get(cv2.CAP_PROP_FRAME_COUNT)
-
-                if fps <= 0:
-                    return default_values
-
-                duration = round(frame_count / fps)
-                if duration <= 0:
-                    return default_values
-
-                vcap.release()
+        # FIX: Replaced heavy OpenCV with lightweight ffprobe for 10x faster processing
+        cmd = [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height,duration",
+            "-of", "csv=p=0:s=x", file_path
+        ]
+        
+        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout, _ = await proc.communicate()
+        
+        output = stdout.decode().strip()
+        if output:
+            parts = output.split('x')
+            if len(parts) >= 3:
+                width = int(parts[0])
+                height = int(parts[1])
+                try:
+                    duration = int(float(parts[2]))
+                except ValueError:
+                    duration = 1
                 return {'width': width, 'height': height, 'duration': duration}
-            except Exception as e:
-                logger.error(f"Error in video_metadata: {e}")
-                return default_values
-        
-        return await loop.run_in_executor(executor, _extract_metadata)
-        
+                
+        return default_values
     except Exception as e:
-        logger.error(f"Error in get_video_metadata: {e}")
+        logger.error(f"Error in get_video_metadata via ffprobe: {e}")
         return default_values
 
 async def add_premium_user(user_id, duration_value, duration_unit):

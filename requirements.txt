@@ -22,7 +22,6 @@ Flask[async]
 pyromod
 werkzeug==2.2.2
 mutagen
-yt-dlp
 requests
 cryptography
 uvloop

@@ -6,7 +6,6 @@ import re
 import asyncio
 import logging
 from datetime import datetime, timedelta
-import yt_dlp
 from motor.motor_asyncio import AsyncIOMotorClient
 from groq import AsyncGroq
 
@@ -100,7 +99,7 @@ async def generate_thumbnail(video_path, watermark, user_id):
         return None
     thumb_path = f"{video_path}_thumb.jpg"
     
-    cmd = ["ffmpeg", "-i", video_path, "-ss", "00:00:01", "-vframes", "1", "-y", thumb_path, "-loglevel", "quiet"]
+    cmd = ["ffmpeg", "-threads", "1", "-i", video_path, "-ss", "00:00:01", "-vframes", "1", "-y", thumb_path, "-loglevel", "quiet"]
     try:
         proc = await asyncio.create_subprocess_exec(*cmd)
         await proc.wait()
@@ -202,110 +201,6 @@ async def save_user_data(user_id, key, value):
         {"$set": {key: value}},
         upsert=True
     )
-
-async def download_youtube_video(url, uid):
-    async with PROCESS_SEMAPHORE:
-        from utils.db import get_user_cookie
-        cookie_file = f"yt_cookies_{uid}.txt"
-        
-        cookies = await get_user_cookie(uid, "yt")
-                
-        if cookies:
-            with open(cookie_file, "w", encoding="utf-8") as f:
-                f.write(cookies)
-                
-        try:
-            def _dl():
-                ydl_opts = {
-                    'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                    'merge_output_format': 'mp4',
-                    'outtmpl': f'yt_download_{uid}_%(id)s.%(ext)s',
-                    'quiet': True,
-                    'no_warnings': True,
-                    'nocheckcertificate': True, 
-                    'legacyserverconnect': True 
-                }
-                if os.path.exists(cookie_file):
-                    ydl_opts['cookiefile'] = cookie_file
-                    
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    filename = ydl.prepare_filename(info)
-                    base, _ = os.path.splitext(filename)
-                    for ext in ['.mp4', '.mkv', '.webm']:
-                        if os.path.exists(base + ext):
-                            return base + ext
-                    return filename
-                    
-            file_path = await asyncio.to_thread(_dl)
-            return file_path
-            
-        except Exception as e:
-            logger.error(f"❌ YouTube Download Error: {e}")
-            return None
-        finally:
-            if os.path.exists(cookie_file):
-                try: os.remove(cookie_file)
-                except: pass
-
-async def copy_header_and_repair(corrupt_file, reference_file):
-    if not os.path.exists(corrupt_file) or not os.path.exists(reference_file):
-        return None
-        
-    logger.info(f"🛠 Starting Ultimate Repair for: {corrupt_file}")
-    
-    untrunc_out = f"{corrupt_file}_fixed.mp4" 
-    final_out = f"final_repaired_{time.time()}.mp4"
-
-    try:
-        logger.info("🔄 Phase 1: Running Untrunc to rebuild headers...")
-        proc1 = await asyncio.create_subprocess_exec(
-            "untrunc", reference_file, corrupt_file,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        await asyncio.wait_for(proc1.wait(), timeout=120)
-
-        if not os.path.exists(untrunc_out) or os.path.getsize(untrunc_out) < 1024:
-            logger.error("❌ Untrunc failed to generate a valid file.")
-            return None
-
-        logger.info("🔄 Phase 2: Remuxing with FFMPEG to align timestamps...")
-        proc2 = await asyncio.create_subprocess_exec(
-            "ffmpeg", 
-            "-err_detect", "ignore_err", 
-            "-i", untrunc_out,
-            "-c", "copy",                
-            "-map", "0",
-            "-movflags", "faststart",    
-            "-y", final_out,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        await asyncio.wait_for(proc2.wait(), timeout=120)
-
-        if os.path.exists(final_out) and os.path.getsize(final_out) > 1024:
-            os.remove(corrupt_file)
-            if os.path.exists(untrunc_out): os.remove(untrunc_out)
-            os.rename(final_out, corrupt_file)
-            logger.info("✅ Ultimate Repair Successful!")
-            return corrupt_file
-            
-        elif os.path.exists(untrunc_out) and os.path.getsize(untrunc_out) > 1024:
-            os.remove(corrupt_file)
-            os.rename(untrunc_out, corrupt_file)
-            logger.info("✅ Repair Successful (Untrunc Phase 1 only)!")
-            return corrupt_file
-
-        return None
-
-    except Exception as e:
-        logger.error(f"❌ Repair Process Error: {e}")
-        return None
-        
-    finally:
-        for temp_f in [untrunc_out, final_out]:
-            if os.path.exists(temp_f) and temp_f != corrupt_file:
-                try: os.remove(temp_f)
-                except: pass
 
 async def get_user_data_key(user_id, key, default=None):
     user_data = await users_collection.find_one({"user_id": int(user_id)})
@@ -440,6 +335,7 @@ async def screenshot(video: str, duration: int, sender: str) -> str | None:
 
     cmd = [
         "ffmpeg",
+        "-threads", "1",
         "-ss", time_stamp,
         "-i", video,
         "-frames:v", "1",

@@ -106,13 +106,13 @@ COMMAND_LABELS = {
     "docbatch": "📄 DocBatch",
     "single": "🔗 Single", "cancel": "🚫 Cancel", "redeem": "🎟 Redeem Code", "fix": "🛠 Fix",
     "settings": "🎨 Settings", "autosync": "🔄 AutoSync", "delsync": "🛑 DelSync", 
-    "dl": "💀 Smart DL", "setcookie": "🍪 Cookie", "pay": "💎 Pay", 
+    "setcookie": "🍪 Cookie", "pay": "💎 Pay", 
     "status": "📊 Status", "admin": "👑 Admin Panel",
-    "arrange": "📦 Arrange"  # 🔥 YE RAHI NAYI LINE 🔥
+    "arrange": "📦 Arrange" 
 }
 
 FREE_COMMANDS = ["id", "plan", "refer", "login", "logout", "setbot", "rembot", "batch", "docbatch", "cancel", "pay", "status", "redeem"] 
-PREMIUM_COMMANDS = ["settings", "setcookie", "single", "dl", "autosync", "delsync", "arrange"]
+PREMIUM_COMMANDS = ["settings", "setcookie", "single", "autosync", "delsync", "arrange"]
 OWNER_COMMANDS = ["admin", "set", "fix"]
 
 def get_help_keyboard(category):
